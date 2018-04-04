@@ -1,0 +1,42 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(here)
+library(knitr)
+theme_set(theme_bw())
+```
+
+```{r read}
+projetos = read_csv(here::here("entrega4/projetos.csv"))
+
+## Parsed with column specification:
+## cols(
+##   gh_project_name = col_character(),
+##   team = col_integer(),
+##   lang = col_character(),
+##   sloc = col_integer(),
+##   tests_per_kloc = col_double(),
+##   build_success = col_double()
+## )
+```
+
+
+```{r clean}
+projetos = projetos %>% 
+    filter(lang != "javascript")
+```
+
+```{r}
+projetos %>% 
+    ggplot(aes(x = "", y = team)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    ylab("Número de Integrantes") + 
+    ggtitle("Quantidade de integrantes por projeto") + 
+    xlab("Projetos") 
+```
