@@ -5,6 +5,8 @@ output: html_notebook
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
+Metodologia: inserir os gráficos e posteriormente editar o HTML.
+
 ```{r setup, include=FALSE, warning=FALSE, message=FALSE}
 library(tidyverse)
 library(here)
