@@ -49,20 +49,6 @@ projetos %>%
     
 ```
 
-Total de integrantes de todos os projetos por linguagem de programação
-```{r}
-projetos %>% 
-  group_by(lang) %>% 
-  summarise(total = sum(team)) %>% 
-  arrange(total) %>%
-  ggplot(aes(x = lang, y = total)) + 
-  geom_col(colour="black", fill="white") +
-  ylab("Quantidade de integrantes") + 
-  xlab("Linguagem de programação") +
-  ggtitle("Total de integrantes de todos os projetos por linguagem de programação") 
-  
-```  
-
 Tamanho das equipes por linguagem de programação
 ```{r}
 projetos %>% 
@@ -208,12 +194,31 @@ projetos %>%
 
 
 PERGUNTAS
-PERGUNTA 1 - Em equipes com menos de 10 membros, projetos de qual linguagem variam mais na proporçao de builds de sucesso
+PERGUNTA 1.0 - Em equipes com menos de 10 membros, projetos de qual linguagem variam mais na proporçao de builds de sucesso
 
+```{r}
+projetos %>% 
+    filter(team < 10) %>%
+    ggplot(aes(x= lang,  y = build_success_prop)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Proporção de builds de sucesso") + 
+    xlab("Linguagem de programação") +
+    ggtitle("Proporção de builds de sucesso por linguagem de programação", subtitle ="em equipes com menos de 10 integrantes" )
+```
+
+Builds de sucesso por linguagem de programação - equipes menos de 10 
+```{r}
+projetos %>% 
+    filter(team < 10) %>%
+    ggplot(aes(x = lang, y = build_success_prop)) + 
+    geom_jitter(alpha = .4, width = .2, size = .8) +
+    ylab("Proporção de builds de sucesso") + 
+    xlab("Linguagem de programação") +
+    ggtitle("Builds de sucesso por linguagem de programação", subtitle ="em equipes com menos de 10 integrantes" )
+    ```
 
 PERGUNTA 1.1 - Em equipes com 10 ou mais membros, projetos de qual linguagem variam mais na proporçao de builds de sucesso
 
-Comparar projetos em java e ruby que tenham aos menos 10 integrantes. Comparar em relação a variação na proporção de buids que são sucesso
 ```{r}
 projetos %>% 
     filter(team >= 10) %>%
@@ -221,27 +226,70 @@ projetos %>%
     geom_boxplot(width = .25) + 
     ylab("Proporção de builds de sucesso") + 
     xlab("Linguagem de programação") +
-    ggtitle("")
+    ggtitle("Proporção de builds de sucesso por linguagem de programação", subtitle ="em equipes com 10 ou mais integrantes" )
 ```
 
+Builds de sucesso por linguagem de programação - equipes com 10 ou mais
 ```{r}
 projetos %>% 
     filter(team >= 10) %>%
     ggplot(aes(x = lang, y = build_success_prop)) + 
     geom_jitter(alpha = .4, width = .2, size = .8) +
-     ylab("Proporção de builds de sucesso") + 
+    ylab("Proporção de builds de sucesso") + 
     xlab("Linguagem de programação") +
-    ggtitle("Quantidade de integrantes por linguagem de programação")
-    ```
+    ggtitle("Builds de sucesso por linguagem de programação", subtitle ="em equipes com 10 ou mais integrantes" )
+```
+
+
+Pergunta 1-final: Comparar projetos em java e ruby que tenham aos menos 10 integrantes. Comparar em relação a variação na proporção de buids que são sucesso
+
+Proporção de builds pror tamanho de grupo - contagem
+```{r}
+a = projetos %>% 
+    filter(team >= 10) %>%
+    within(w <- "Equipe >= 10")
+
+b = projetos %>% 
+    filter(team < 10) %>%
+    within(w <- "Equipe < 10")
+
+resultados <- bind_rows(a, b)
+
+resultados %>% 
+  ggplot(aes(x = w, y=build_success_prop)) + 
+    geom_jitter(width = .02, height = 0, size = 1, alpha = .4) + 
+    facet_grid(lang ~ .) +
+    scale_y_log10() +
+    ylab("Proporção de builds de sucesso") + 
+    xlab("Tamanho da equipe") +
+    ggtitle("Proporção de builds de sucesso por linguagem de programação")
+
+```
+
+Proporção de builds pror tamanho de grupo - boxplot
+```{r}
+a = projetos %>% 
+    filter(team >= 10) %>%
+    within(w <- "Equipe >= 10")
+
+b = projetos %>% 
+    filter(team < 10) %>%
+    within(w <- "Equipe < 10")
+
+resultados <- bind_rows(a, b)
+
+
+resultados %>%
+    ggplot(aes(x= w,  y = build_success_prop)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Proporção de builds de sucesso") + 
+    xlab("Tamanho da equipe") +
+    ggtitle("Proporção de builds de sucesso por linguagem de programação")
+```
     
-Pergunta 1.2: Comparar equipes pequenas e grandes, qual grupos varia mais na proporção de builds cujo resultado é sucesso?
 
 
-PERGUNTA 2 - Ao comparar projetos de Java e Ruby, nos nossos dados, projetos de qual linguagem varia maisna proporção de commits?
 
-Pergunta 2.1: equipes com mais de 10 membros
-
-Pergunta 2.2: equipes com menos de 10 membros
 
 
 
