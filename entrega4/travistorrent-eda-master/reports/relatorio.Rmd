@@ -1,0 +1,210 @@
+---
+title: "Relatório - Análise exploratória e descritiva do TravisTorrent"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(knitr)
+theme_set(theme_bw())
+```
+
+```{r read}
+projetos = read_csv(here::here("data/projetos.csv"))
+cols(
+  gh_project_name = col_character(),
+  team = col_double(),
+  lang = col_character(),
+  sloc_end = col_integer(),
+  sloc_med = col_double(),
+  activity_period = col_integer(),
+  num_commits = col_integer(),
+  commits_per_month = col_double(),
+  tests_per_kloc = col_double(),
+  total_builds = col_integer(),
+  build_success_prop = col_double(),
+  builds_per_month = col_double(),
+  tests_added_per_build = col_double(),
+  tests_successful = col_double(),
+  test_density = col_double(),
+  test_size_avg = col_double()
+)
+
+projetos = projetos %>% 
+    filter(lang != "javascript")
+```
+
+Quantidade de integrantes por projeto
+```{r} 
+projetos %>% 
+    ggplot(aes(x = "", y = team)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    ylab("Número de Integrantes") + 
+    ggtitle("Quantidade de integrantes por projeto") + 
+    xlab("Projetos") 
+    
+```
+
+Número de projetos pela quantidade de integrantes
+```{r}
+projetos %>% 
+    ggplot(mapping = aes(x = team)) + 
+    geom_histogram(bins = 20, binwidth = 10, colour="black", fill="white") + 
+    geom_rug(alpha = 0.5) +
+    ylab("Número de Projetos") + 
+    xlab("Tamanho da equipe") +
+    ggtitle("Número de projetos pela quantidade de integrantes") +
+    geom_vline(aes(xintercept=mean(team, na.rm=T)),color="red", linetype="dashed", size=1)
+    
+```
+
+Quantidade de projetos pela linguagem de programação
+```{r}
+projetos %>% 
+    group_by(lang) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = lang, y = n)) + 
+    geom_col(colour="black", fill="white", show.legend = TRUE) + 
+    ylab("Quantidade de projetos") + 
+    xlab("Linguagem de programação") +
+    ggtitle("Quantidade de projetos pela linguagem de programação") 
+```
+
+Quantidade de integrantes por linguagem de programação
+```{r}
+projetos %>% 
+    ggplot(aes(x = lang, y = team)) + 
+    geom_jitter(alpha = .4, width = .2, size = .8) +
+    ylab("Quantidade de integrantes") + 
+    xlab("Linguagem de programação") +
+    ggtitle("Quantidade de integrantes por linguagem de programação")
+```
+
+Quantidade de builds pela linguagem de programação
+```{r}
+projetos %>% 
+    ggplot(aes(x = lang, y = build_success_prop)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    ylab("Proporção de builds de sucesso") + 
+    ggtitle("Quantidade de builds de sucesso por linguagem de programação") + 
+    xlab("Linguagem de programação") 
+```
+
+Propoção de builds de sucesso por linguagem de programação
+```{r}
+projetos %>% 
+    ggplot(aes(x= build_success_prop)) + 
+    geom_histogram(bins = 10, colour="black", fill="white") + 
+    facet_grid(lang ~ .) + 
+    ylab("Quantidade de projetos") + 
+    xlab("Proporção de build de sucesso") +
+    ggtitle("Propoção de builds de sucesso por linguagem de programação")
+```
+
+PERGUNTAS
+PERGUNTA 1 - Total de integrantes de todos os projetos por linguagem de programação
+```{r}
+projetos %>% 
+  group_by(lang) %>% 
+  summarise(total = sum(team)) %>% 
+  arrange(total) %>%
+  ggplot(aes(x = lang, y = total)) + 
+  geom_col(colour="black", fill="white") +
+  ylab("Quantidade de integrantes") + 
+  xlab("Linguagem de programação") +
+  ggtitle("Total de integrantes de todos os projetos por linguagem de programação") 
+  
+```  
+
+```{r}
+projetos %>% 
+    ggplot(aes(x = team)) + 
+    geom_histogram(bins = 20, fill = "white", color = "blue") + 
+    facet_grid(lang ~ .) +
+    scale_x_log10() + 
+    ylab("Quantidade de integrantes") + 
+    xlab("Tamanho da equpe") +
+    ggtitle("Total de ") 
+    
+```
+
+```{r}
+projetos %>% 
+    ggplot(aes(x = team)) + 
+    geom_histogram(bins = 20, fill = "white", color = "blue") + 
+    geom_rug(alpha = .3) + 
+    facet_grid(lang ~ .) 
+```
+
+```{r}
+projetos %>% 
+    ggplot(aes(x = sloc_end)) + 
+    geom_histogram(bins = 20, fill = "white", color = "blue") + 
+    facet_grid(lang ~ .) +
+    scale_x_log10()
+```
+
+PERGUNTA 2 - Comparar projetos em java e ruby que tenham aos menos 10 integrantes. Comparar em relação a variação na proporção de buids que são sucesso
+```{r}
+projetos %>% 
+    filter(team >= 10) %>%
+    ggplot(aes(x= lang,  y = build_success_prop)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Proporção de builds de sucesso") + 
+    xlab("Linguagem de programação") +
+    ggtitle("")
+```
+```{r}
+projetos %>% 
+    filter(team >= 10) %>%
+    ggplot(aes(x = lang, y = build_success_prop)) + 
+    geom_jitter(alpha = .4, width = .2, size = .8) +
+     ylab("Proporção de builds de sucesso") + 
+    xlab("Linguagem de programação") +
+    ggtitle("Quantidade de integrantes por linguagem de programação")
+    ```
+    
+Distribuição acumulativa de builds de sucesso
+```{r}
+projetos %>% 
+    filter(team >= 10) %>%
+    ggplot(aes(x= build_success_prop, color = lang)) + 
+    stat_ecdf() + 
+    ylab("Densidade do número de projetos") + 
+    xlab("Proporção de build de sucesso") +
+    ggtitle("Densidade acumulativa da propoção de builds de sucesso por linguagem de programação")
+```
+
+Densidade de projetos pela quantidade de integrantes
+```{r}
+projetos %>% 
+    ggplot(mapping = aes(x = team)) + 
+    geom_density()  +
+    ylab("Densidade") + 
+    xlab("Tamanho da eqquipe") +
+    ggtitle("Densidade de projetos pela quantidade de integrantes")
+```
+
+Proporção de projetos pela quantidade de integrantes
+```{r}
+projetos %>% 
+    ggplot(aes(x = team)) + 
+    stat_ecdf() + 
+    ylab("Proporção de Projetos") + 
+    xlab("Tamanho da equipe") +
+    ggtitle("Proporção de projetos pela quantidade de integrantes")
+
+```
+
+istribuição acumulativa de builds de sucesso
+```{r}
+projetos %>% 
+    ggplot(aes(x= build_success_prop, color = lang)) + 
+    stat_ecdf() + 
+    ylab("Densidade do número de projetos") + 
+    xlab("Proporção de build de sucesso") +
+    ggtitle("Densidade acumulativa da propoção de builds de sucesso por linguagem de programação")
+```
