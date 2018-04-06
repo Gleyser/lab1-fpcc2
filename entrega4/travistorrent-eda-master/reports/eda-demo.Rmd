@@ -170,7 +170,7 @@ projetos %>%
 
 ```{r}
 projetos %>% 
-    ggplot(aes(x = build_success)) + 
+    ggplot(aes(x = build_success_prop)) + 
     geom_density()
 ```
 
