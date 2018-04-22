@@ -1,0 +1,297 @@
+---
+title: "Relat?rio - An?lise explorat?ria e descritiva do TravisTorrent"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(here)
+library(knitr)
+theme_set(theme_bw())
+```
+
+```{r read}
+projetos = read_csv(here::here("data/projetos.csv"))
+cols(
+  gh_project_name = col_character(),
+  team = col_double(),
+  lang = col_character(),
+  sloc_end = col_integer(),
+  sloc_med = col_double(),
+  activity_period = col_integer(),
+  num_commits = col_integer(),
+  commits_per_month = col_double(),
+  tests_per_kloc = col_double(),
+  total_builds = col_integer(),
+  build_success_prop = col_double(),
+  builds_per_month = col_double(),
+  tests_added_per_build = col_double(),
+  tests_successful = col_double(),
+  test_density = col_double(),
+  test_size_avg = col_double()
+)
+
+projetos = projetos %>% 
+    filter(lang != "javascript")
+```
+
+===== Vari?vel: Equipe
+Quantidade de integrantes por projeto
+```{r} 
+projetos %>% 
+    ggplot(aes(x = "", y = team)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    ylab("N?mero de Integrantes") + 
+    ggtitle("Quantidade de integrantes por projeto") + 
+    xlab("Projetos") 
+    
+```
+
+Tamanho das equipes por linguagem de programa??o
+```{r}
+projetos %>% 
+    ggplot(aes(x = team)) + 
+    geom_histogram(bins = 20, fill = "white", color = "blue") + 
+    geom_rug(alpha = .3) + 
+    facet_grid(lang ~ .) 
+```
+
+N?mero de projetos pela quantidade de integrantes
+```{r}
+projetos %>% 
+    ggplot(mapping = aes(x = team)) + 
+    geom_histogram(bins = 20, binwidth = 10, colour="black", fill="white") + 
+    geom_rug(alpha = 0.5) +
+    ylab("N?mero de Projetos") + 
+    xlab("Tamanho da equipe") +
+    ggtitle("N?mero de projetos pela quantidade de integrantes") +
+    geom_vline(aes(xintercept=mean(team, na.rm=T)),color="red", linetype="dashed", size=1)
+    
+```
+
+===== Vari?vel: linguagem de programa??o
+Quantidade de projetos pela linguagem de programa??o
+```{r}
+projetos %>% 
+    group_by(lang) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = lang, y = n)) + 
+    geom_col(colour="black", fill="white", show.legend = TRUE) + 
+    ylab("Quantidade de projetos") + 
+    xlab("Linguagem de programa??o") +
+    ggtitle("Quantidade de projetos pela linguagem de programa??o") 
+```
+
+Equipes por linguagem de programa??o
+```{r}
+projetos %>% 
+    ggplot(aes(x = lang, y = team)) + 
+    geom_jitter(alpha = .4, width = .2, size = .8) +
+    ylab("Equipes") + 
+    xlab("Linguagem de programa??o") +
+    ggtitle("Equipes por linguagem de programa??o")
+```
+
+===== vari?vel: builds de sucesso
+
+Quantidade de builds de sucesso por linguagem de programa??o
+```{r}
+projetos %>% 
+    ggplot(aes(x = lang, y = build_success_prop)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    ylab("Propor??o de builds de sucesso") + 
+    ggtitle("Quantidade de builds de sucesso por linguagem de programa??o") + 
+    xlab("Linguagem de programa??o") 
+```
+
+Propo??o de builds de sucesso por linguagem de programa??o
+```{r}
+projetos %>% 
+    ggplot(aes(x= build_success_prop)) + 
+    geom_histogram(bins = 10, colour="black", fill="white") + 
+    facet_grid(lang ~ .) + 
+    ylab("Quantidade de projetos") + 
+    xlab("Proporção de build de sucesso") +
+    ggtitle("Proporção de builds de sucesso por linguagem de programação") +
+    theme(strip.background = element_rect(colour = "black", fill = "white"))
+```
+
+===== vari?vel: Commits
+Quantidade de commits pela linguagem de programa??o
+```{r} 
+projetos %>% 
+    ggplot(aes(x = lang, y = num_commits)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    ylab("Quantidade de commits") + 
+    ggtitle("Quantidade de commits pela linguagem de programa??o") + 
+    xlab("Linguagem de programa??o") 
+    
+```
+
+Total Commits por linguagem de programa??o
+```{r}
+projetos %>% 
+  group_by(lang) %>% 
+  summarise(total = sum(num_commits)) %>% 
+  arrange(total) %>%
+  ggplot(aes(x = lang, y = total)) + 
+  geom_col(colour="black", fill="white") +
+  ylab("Quantidade de commits") + 
+  xlab("Linguagem de programa??o") +
+  ggtitle("Total de commits de todos os projetos por linguagem de programa??o") 
+  
+```  
+
+Quantidade de commits pelo tamanho da equipe
+```{r} 
+projetos %>% 
+    ggplot(aes(x = team, y = num_commits)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    ylab("Quantidade de commits") + 
+    ggtitle("Quantidade de commits pelo tamanho da equipe") + 
+    xlab("Tamanho da equipe") 
+    
+```
+
+N?mero de commits pelo tamanho da equipe
+```{r}
+projetos %>% 
+    ggplot(aes(x = team, 
+               y = num_commits)) + 
+    geom_point(alpha = .3) + 
+    scale_x_log10() + 
+    scale_y_log10() + 
+    ylab("Quantidade de commits") + 
+    xlab("Tamanho da equipe") +
+    ggtitle("N?mero de commits pelo tamanho da equipe") 
+```
+
+N?mero de projetos pelo total de commits e linguagem de programa??o
+```{r}
+projetos %>% 
+    ggplot(aes(x = num_commits)) + 
+    geom_histogram(bins = 20, fill = "white", color = "blue") + 
+    facet_grid(lang ~ .) +
+    scale_x_log10() +
+    ylab("Quantidade de projetos") + 
+    xlab("N?mero de commits") +
+    ggtitle("N?mero de projetos pelo total de commits") 
+```
+
+N?mero de commits pela propor??o de builds de sucesso
+```{r}
+projetos %>% 
+  ggplot(aes(x = build_success_prop, y = num_commits)) + 
+    geom_jitter(width = .02, height = 0, size = 2, alpha = .6) + 
+    facet_grid(lang ~ .) +
+    scale_y_log10() + 
+    ylab("N?mero de commits") + 
+    xlab("Propor??o de builds de cuesso") +
+    ggtitle("N?mero de commits pela propor??o de builds de sucesso") 
+
+```
+
+
+PERGUNTAS
+PERGUNTA 1.0 - Em equipes com menos de 10 membros, projetos de qual linguagem variam mais na propor?ao de builds de sucesso
+
+```{r}
+projetos %>% 
+    filter(team < 10) %>%
+    ggplot(aes(x= lang,  y = build_success_prop)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Propor??o de builds de sucesso") + 
+    xlab("Linguagem de programa??o") +
+    ggtitle("Propor??o de builds de sucesso por linguagem de programa??o", subtitle ="em equipes com menos de 10 integrantes" )
+```
+
+Builds de sucesso por linguagem de programa??o - equipes menos de 10 
+```{r}
+projetos %>% 
+    filter(team < 10) %>%
+    ggplot(aes(x = lang, y = build_success_prop)) + 
+    geom_jitter(alpha = .4, width = .2, size = .8) +
+    ylab("Propor??o de builds de sucesso") + 
+    xlab("Linguagem de programa??o") +
+    ggtitle("Builds de sucesso por linguagem de programa??o", subtitle ="em equipes com menos de 10 integrantes" )
+    ```
+
+PERGUNTA 1.1 - Em equipes com 10 ou mais membros, projetos de qual linguagem variam mais na propor?ao de builds de sucesso
+
+```{r}
+projetos %>% 
+    filter(team >= 10) %>%
+    ggplot(aes(x= lang,  y = build_success_prop)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Propor??o de builds de sucesso") + 
+    xlab("Linguagem de programa??o") +
+    ggtitle("Propor??o de builds de sucesso por linguagem de programa??o", subtitle ="em equipes com 10 ou mais integrantes" )
+```
+
+Builds de sucesso por linguagem de programa??o - equipes com 10 ou mais
+```{r}
+projetos %>% 
+    filter(team >= 10) %>%
+    ggplot(aes(x = lang, y = build_success_prop)) + 
+    geom_jitter(alpha = .4, width = .2, size = .8) +
+    ylab("Propor??o de builds de sucesso") + 
+    xlab("Linguagem de programa??o") +
+    ggtitle("Builds de sucesso por linguagem de programa??o", subtitle ="em equipes com 10 ou mais integrantes" )
+```
+
+
+Pergunta 1-final: Comparar projetos em java e ruby que tenham aos menos 10 integrantes. Comparar em rela??o a varia??o na propor??o de buids que s?o sucesso
+
+Propor??o de builds pror tamanho de grupo - contagem
+```{r}
+a = projetos %>% 
+    filter(team >= 10) %>%
+    within(w <- "Equipe >= 10")
+
+b = projetos %>% 
+    filter(team < 10) %>%
+    within(w <- "Equipe < 10")
+
+resultados <- bind_rows(a, b)
+
+resultados %>% 
+  ggplot(aes(x = w, y=build_success_prop)) + 
+    geom_jitter(width = .02, height = 0, size = 1, alpha = .4) + 
+    facet_grid(lang ~ .) +
+    scale_y_log10() +
+    ylab("Propor??o de builds de sucesso") + 
+    xlab("Tamanho da equipe") +
+    ggtitle("Propor??o de builds de sucesso por linguagem de programa??o")
+
+```
+
+Propor??o de builds pror tamanho de grupo - boxplot
+```{r}
+a = projetos %>% 
+    filter(team >= 10) %>%
+    within(w <- "Equipe >= 10")
+
+b = projetos %>% 
+    filter(team < 10) %>%
+    within(w <- "Equipe < 10")
+
+resultados <- bind_rows(a, b)
+
+
+resultados %>%
+    ggplot(aes(x= w,  y = build_success_prop)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Propor??o de builds de sucesso") + 
+    xlab("Tamanho da equipe") +
+    ggtitle("Propor??o de builds de sucesso por linguagem de programa??o")
+```
+    
+
+
+
+
+
+
+

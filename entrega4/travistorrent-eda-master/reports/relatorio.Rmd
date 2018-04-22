@@ -204,7 +204,38 @@ istribuição acumulativa de builds de sucesso
 projetos %>% 
     ggplot(aes(x= build_success_prop, color = lang)) + 
     stat_ecdf() + 
-    ylab("Densidade do número de projetos") + 
-    xlab("Proporção de build de sucesso") +
-    ggtitle("Densidade acumulativa da propoção de builds de sucesso por linguagem de programação")
+    ggtitle("Densidade acumulativa da propoção de builds de sucesso") + 
+    theme(
+       legend.position = c(.95, .25),
+       legend.justification = c("right", "top"),
+       legend.box.just = "right",
+       legend.margin = margin(6, 6, 6, 6)) +
+    labs(
+    x = "Proporção de builds de sucesso",
+    y = "Densidade do número de projetos",
+    colour = "Linguagem"
+   ) +
+    theme(plot.title=element_text(size=16, face = "bold")) +
+    theme(axis.title.x = element_text(size=15)) +
+    theme(axis.title.y = element_text(size=15)) +
+    theme(legend.text  = element_text(size=15)) + 
+    theme(legend.title = element_text(size=15)) + 
+    theme(axis.text.x =  element_text(size=15)) +
+    theme(axis.text.y =  element_text(size=15))
+```
+
+
+
+istribuição acumulativa de builds de sucesso
+```{r}
+projetos %>% 
+    ggplot(aes(x= build_success_prop, color = lang)) + 
+    stat_ecdf() + 
+    ggtitle("Densidade acumulativa da propoção de builds de sucesso")  +
+    labs(
+    x = "Proporção de builds de sucesso",
+    y = "Densidade do número de projetos"
+    
+   )
+    
 ```
