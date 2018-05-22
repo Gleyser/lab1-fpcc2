@@ -1,0 +1,367 @@
+---
+title: 'Lab 3 - Checkpoint 1: AnÃ¡lise de dados de buscas em projetos da Wikimedia
+  - InferÃªncia'
+output:
+  html_document:
+    df_print: paged
+---
+
+O objetivo deste estudo é investigar dados de buscas realizadas por usuários em projetos da Wikimedia. Os dados de buscas de usuários selecionados aleatoriamente foram coletados durante 8 dias por logs de eventos e disponibilizados em processos seletivos da Wikimedia Foundation em 2016. Os dados originais estão disponiveis no site da wikimedia em ‘/data/search_data.csv.’ Os dados são usados para avaliar a satisfação do usuário com os resultados das buscas. Os resultados, armazenados em logs, permitem identificar o tempo que os usuários permanecem nas páginas visitadas.
+
+Realizou-se em relatórios anteriores análise descritiva dos dados, nesse relatório será realizada inferência via intervalos de confiança, usando bootstrap. O objetivo é estimar com confiança de 95% intervalos para caracteristicas da população (todos os projetos).
+
+## 1. Configurações iniciais e conjunto de dados 
+
+O primeiro passo para iniciarmos o estudo é conhecer a base de dados, as variáveis utilizadas e as configurações iniciais. O código a seguir mostra as bibliotecas e dependências utilizadas. 
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(lubridate)
+library(ggplot2)
+library(knitr)
+library(boot)
+theme_set(theme_bw())
+```
+
+```{r ETL}
+buscas = read_csv(here::here("data/search_data.csv")) %>%
+    mutate(day=round_date(session_start_date, unit = "day")) %>%
+    filter((first_click <= results) | (is.na(first_click) & num_clicks == 0)) #%>%
+    #head(10000)
+
+## Parsed with column specification:
+ cols(
+   session_id = col_character(),
+   search_index = col_integer(),
+   session_start_timestamp = col_double(),
+   session_end_timestamp = col_double(),
+   session_start_date = col_datetime(format = ""),
+   session_end_date = col_datetime(format = ""),
+   checkin = col_integer(),
+   group = col_character(),
+   results = col_integer(),
+   num_clicks = col_integer(),
+   first_click = col_integer()
+ )
+```
+
+No código acima temos as bibliotecas utilizadas e a leitura dos dados. Incluimos ainda a coluna **day** que contém a data, sem a hora, apenas o dia. O nosso conjunto de dados possui as seguintes colunas:
+
+session_id: Essa coluna é um ID exclusivo que identifica as sessões; 
+search_index: Index da busca realizada pelo usuário na sessão; 
+session_start_timestamp: Marcação do tempo no início da busca; session_end_timestamp: Marcação do tempo no fim da busca; 
+session_start_date: Data e hora do início da busca; 
+session_end_date: Data e hora do fim da busca; 
+checkin: Duranção do tempo em que a página ficou aberta; group: Representa o grupo. Esse grupo pode ser “a” ou “b”, sendo o grupo b, o grupo de controle; 
+results: Número de resultados retornados ao usuário; 
+num_clicks: Número de cliques do usuário; 
+first_click: Posição do resultado que o usuário clicou primeiro.
+
+Além de incluir a variável day, alguns dados foram filtrados e removidos da base inicial por serem considerados inconsistentes. COnsiderando a explicação da semântica de cada coluna, temos que o primeiro clique do usuário deve está entre 1 e o número total de resultados retornado pela busca. Sendo assim, o número first_click deve está entre 1 e results. Além disso, o número de cliques (num_clicks) deve está consistente com a coluna first_click. Se o usuário fez algum clique, deve existir a posição do primeiro click. Linhas que não atendem esses parâmetros foram consideradas inconsistentes e foram filtradas.
+
+Iremos utilizar a técnica de bootstrap e intervalos de confiança para responder as questões a seguir:
+
+## 2. Pergunta 1: Qual é a taxa de cliques geral diária? Como isso varia entre os grupos?
+
+A primeira inferência realizada é sobre a média do número de cliques. Apesar da pergunta está relacionada com a taxa de cliques geral diária,inicialmente podemos concluir com 95% de confiança no método utilizado que a média de número de cliques está entre (0.2878, 0.2951), ou seja, a taxa de cliques é muito baixa. Isso ocorre porque na amostra temos muitas buscas com nenhum clique. Isso foi identificado em relatório anterior.
+
+```{r}
+fun.boot <- function(x, i) {
+    mean(x[i])
+}
+
+#summary(buscas)
+
+res.boot <- boot(data = buscas$num_clicks, 
+                 statistic = fun.boot, 
+                 R = 2000)
+plot(res.boot)
+boot.ci(boot.out = res.boot, conf = 0.95, type = "basic")
+```
+Com o objetivo de inferir a média de cliques, quando o usuário clica em pelo menos um resultado, filtrou-se da inferência com essas observações e com 95% de confiança podemos afirmar que a média de cliques quando o usuário clica em algum é resultado está entre 1.196 e 1.214, ou seja, geralmente clica no primeiro resultado. 
+```{r}
+buscasComClicks = buscas %>%
+    filter((num_clicks > 0)) 
+
+fun.boot <- function(x, i) {
+    mean(x[i])
+}
+
+#summary(buscas)
+
+res.boot <- boot(data = buscasComClicks$num_clicks, 
+                 statistic = fun.boot, 
+                 R = 2000)
+plot(res.boot)
+boot.ci(boot.out = res.boot, conf = 0.95, type = "basic")
+```
+
+COnsiderando que a taxa de cliques é a soma dos cliques do dia dividido pelo total de buscas naquele dia, o objetivo é estimar esse valor e verificar como varia entre os grupos A e B. A função sumariza o número de cliques e dividide pelo total de buscas no mesmo dia.
+
+```{r}
+amostra <- buscas 
+
+taxaCliques <- function(dados, indices) {
+    media <- dados %>% 
+            slice(indices) %>%  
+            group_by(day) %>%
+            summarise(clicks = sum(num_clicks), n = n(), taxa = (clicks/n)*100) %>%
+            pull(taxa) %>%
+            mean()
+    return(media)
+}
+
+#summary(amostra)
+
+res.boot <- boot(data = amostra, 
+                 statistic = taxaCliques, 
+                 R = 2000)  
+
+plot(res.boot)
+boot.ci(boot.out = res.boot, conf = 0.95, type = "basic")
+```
+A partir do gráfico e dos resultados acima, podemos inferir que a média geral diária do número de cliques está entre 28,70% e 29,44% com 95% de confiança. Agora iremos analisar a taxa de cliques geral diária por grupos. A taxa diáriade cliques permanece sendo calculada da mesma forma, todavia é preciso agrupar por grupo. A partir do gráfico e dos resultados abaixo, podemos inferir que a diferença na média geral diária do número de cliques entre os grupos A e B, está entre 19,70 e 20,92 com 95% de confiança. Como não interceptou o eixo zero, podemos inferir que a taxa de cliques diária, para o grupo A, é sempre maior que a taxa de cliques para o grupo B.
+
+```{r}
+amostra <- buscas 
+
+taxaCliques <- function(dados, indices) {
+    mediaTC <- dados %>% 
+            slice(indices) %>%
+            group_by(group, day) %>%
+            summarise(clicks = sum(num_clicks), n = n(), taxa = (clicks/n)*100) %>%
+            summarise(media = mean(taxa)) %>%
+            pull(media)
+    
+    return(mediaTC[1] - mediaTC[2])
+}
+
+#summary(amostra)
+
+res.boot <- boot(data = amostra, 
+                 statistic = taxaCliques, 
+                 R = 2000)
+plot(res.boot)
+boot.ci(boot.out = res.boot, conf = 0.95, type = "basic")
+```
+
+## 3. Pergunta extra: a mesma pergunta 1, porém em vez de comparar o grupo A com o grupo B (um teste A/B), iremos comparar a metade das sessões do grupo A (escolhida aleatoriamente) com outra metade das sessões do mesmo grupo (um teste A/A).
+
+A partir do gráfico e dos resultados abaixo, podemos inferir com 95% de confiança que a diferença na média geral diária do número de cliques entre a primeira metade do grupo A e a segunda metade do grupo A, está entre -2,28 e -0,29 com 95% de confiança. Como o valor é sempre negativo podemos inferir que a taxa é maior na segunda metade, porém não muito maior. 
+
+```{r}
+# filtrando o grupo A
+grupoA <- buscas %>%
+            filter(group == "a") 
+
+# calcular o tamanho da amostra
+amostraSize <- grupoA %>%
+                    summarise(tamanho = n()) %>%
+                    pull(tamanho)
+
+funcao_taxa <- function(dados, indices) {
+    
+    dados <- dados %>%
+        slice(indices)
+    
+    # primeira metade
+    amostra1 <- dados %>%
+                slice(1 : (amostraSize/2)) %>%   
+                mutate(grupo = "Primeira")
+    
+    # segunda metade
+    amostra2 <- dados %>%
+                slice(amostraSize/2 + 1: amostraSize) %>%  
+                mutate(grupo = "Segunda")
+    
+    nova_amostra <- bind_rows(amostra1, amostra2)
+    
+    # Repetir código a inferência anterior
+    mediaTC <- nova_amostra %>% 
+            group_by(grupo, day) %>%
+            summarise(clicks = sum(num_clicks), n = n(), taxa = (clicks/n)*100) %>%
+            summarise(media = mean(taxa)) %>%
+            pull(media)
+    
+    return(mediaTC[1] - mediaTC[2])
+}
+
+res.boot <- boot(data = grupoA, 
+                 statistic = funcao_taxa, 
+                 R = 2000)
+plot(res.boot)
+boot.ci(boot.out = res.boot, conf = 0.95, type = "basic")
+```
+
+
+## 4. Pergunta 2: Quais resultados as pessoas tendem a tentar primeiro? Como isso muda no dia-a-dia?
+
+Para essa pergunta estamos interessaods e buscas com resultados e que posuem o indice do primeiro click identificado. Resultados com resultados igual a 0 ou sem indice do primeiro click foram removidas. A inferência nesse caso será o intervalo de confiança para a média do first_click.
+
+```{r}
+buscas_com_resultado <- buscas %>%
+    filter(results > 0, !is.na(first_click))
+
+primeiroClique <- function(dados, indices) {
+    media <- dados %>% 
+            slice(indices) %>%
+            pull(first_click) %>%
+            mean()
+    
+    return(media)
+}
+
+res.boot <- boot(data = buscas_com_resultado, 
+                 statistic = primeiroClique, 
+                 R = 2000)
+plot(res.boot)
+boot.ci(boot.out = res.boot, conf = 0.95, type = "basic")
+```
+
+Podemos inferir com 95% de confiança que as pessoas tendem a tentar primeiro, em média, nos resultados cujo indice está entre 2.291 e  2.382, ou seja, as pessoas tendem a tentar primeiro os primeiros resultados. A segunda questão relacionada a variação desse comportamento do longo do dia-a-dia. 
+
+```{r}
+buscas_com_resultado <- buscas %>%
+    filter(results > 0, !is.na(first_click))
+
+buscas_com_resultado <- mutate(buscas_com_resultado, dia = strftime(day, '%A'))
+
+domingo <- buscas_com_resultado %>%
+                    filter(dia == "domingo")
+segunda <- buscas_com_resultado %>%
+                    filter(dia == "segunda-feira")
+terca <- buscas_com_resultado %>%
+                    filter(dia == "terça-feira")
+quarta <- buscas_com_resultado %>%
+                    filter(dia == "quarta-feira")
+quinta <- buscas_com_resultado %>%
+                    filter(dia == "quinta-feira")
+sexta <- buscas_com_resultado %>%
+                    filter(dia == "sexta-feira")
+sabado <- buscas_com_resultado %>%
+                    filter(dia == "sábado")
+
+primeiroClique <- function(dados, indices) {
+    media <- dados %>% 
+            slice(indices) %>%
+            pull(first_click) %>%
+            mean()
+    
+    return(media)
+  }
+  
+distribuicaoF <- function(amostra) {
+    distribuicao <- boot(data = amostra, 
+                 statistic = primeiroClique, 
+                 R = 2000)
+    
+    return(distribuicao)
+}
+
+
+distribuicao_domingo <- distribuicaoF(domingo)
+distribuicao_segunda <- distribuicaoF(segunda)
+distribuicao_terca <- distribuicaoF(terca)
+distribuicao_quarta <- distribuicaoF(quarta)
+distribuicao_quinta <- distribuicaoF(quinta)
+distribuicao_sexta <- distribuicaoF(sexta)
+distribuicao_sabado <- distribuicaoF(sabado)
+      
+
+ciDomingo = boot.ci(boot.out = distribuicao_domingo, conf = 0.95, type = "basic")
+ciSegunda = boot.ci(boot.out = distribuicao_segunda, conf = 0.95, type = "basic")
+ciTerca = boot.ci(boot.out = distribuicao_terca, conf = 0.95, type = "basic")
+ciQuarta = boot.ci(boot.out = distribuicao_quarta, conf = 0.95, type = "basic")
+ciQuinta = boot.ci(boot.out = distribuicao_quinta, conf = 0.95, type = "basic")
+ciSexta = boot.ci(boot.out = distribuicao_sexta, conf = 0.95, type = "basic")
+ciSabado = boot.ci(boot.out = distribuicao_sabado, conf = 0.95, type = "basic")
+
+df = data.frame(rbind(ciDomingo, 
+                      ciSegunda,
+                      ciTerca,
+                      ciQuarta,
+                      ciQuinta,
+                      ciSexta,
+                      ciSabado))
+df$diaDaSemana = row.names(df)
+
+df %>% 
+  ggplot(aes(x = diaDaSemana, ymin = substr(df$basic, 25, 28), ymax = substr(df$basic, 43, 46))) + 
+  geom_errorbar(width = .2)
+
+
+```
+
+Podemos inferir com 95% de confiança que as pessoas tendem a tentar nos primeiros resultados e que ao longo do dia-a-dia esse comportamente se repete. O menor valor inferido ocorre na quinta-feira (2,16) e o maior na segunda-feira (2,61), considerando os resultados anteriores onde o intervalo era 2.291 e  2.382, podemos notar que no dia-a-dia o comportamente de tentar os primeiros links é mantido.
+
+## 5. Pergunta 3: Qual é a taxa de resultados zero no geral? Como isso varia entre os grupos?
+
+Nesse momento estamos interessados em resultados zero, e inferir a taxa desses resultados na população. Em seguida iremos comparar a taxa nos grupos, semelhantemente ao que foi feito com o número de clicks. O gráfico a seguir mostra que com um intervalo de confiança de 95%, a taxa de resultados zero está entre 18,28% e 18,68%.
+
+```{r}
+amostra <- buscas
+
+calcula_taxa_resultados <- function(dados, indices) {
+    dados <- dados %>%
+            slice(indices)
+    
+    total_sem_resultado <- dados %>%
+                            filter(results == 0) %>%
+                            summarise(total_buscas_vazias = n()) %>%
+                            pull(total_buscas_vazias)
+
+    total_de_buscas <- dados %>% 
+                        summarise(total_buscas = n()) %>%
+                        pull(total_buscas)
+
+    taxa_buscas_sem_resultado <- total_sem_resultado / total_de_buscas
+    
+    return(taxa_buscas_sem_resultado)
+}
+
+res.boot <- boot(data = amostra, 
+                 statistic = calcula_taxa_resultados, 
+                 R = 2000)
+
+plot(res.boot)
+
+boot.ci(boot.out = res.boot, conf = 0.95, type = "basic")
+```
+Em relação a diferença entre os grupos A e B, podemos inferir com 95% ded confiança que a taxa de zeros é maior no grupo A, sendo essa diferença entre 0.1816 e  0.1866, ou seja, existe diferença, porém pequena.
+```{r}
+amostra <- buscas
+
+calcula_taxa_resultados <- function(dados, indices) {
+    dados <- dados %>%
+            slice(indices)
+    
+    buscas_sem_resultado <- dados %>%
+                            filter(results == 0) %>%
+                            group_by(group) %>%
+                            summarise(total_buscas_vazias = n()) %>%
+                            pull(total_buscas_vazias)
+
+    total_de_buscas <- dados %>% 
+                        group_by(group) %>%
+                        summarise(total_buscas = n()) %>%
+                        pull(total_buscas)
+
+    taxa_buscas_sem_resultado <- (buscas_sem_resultado[1] / total_de_buscas[1]) 
+                                    - (buscas_sem_resultado[2] / total_de_buscas[2])
+    
+    return(taxa_buscas_sem_resultado)
+    
+}
+
+res.boot <- boot(data = amostra, 
+                 statistic = calcula_taxa_resultados, 
+                 R = 2000)
+plot(res.boot)
+
+boot.ci(boot.out = res.boot, conf = 0.95, type = "basic")
+```
+
+## 6. Conclusões
+
+Esse relatório abordou as mesmas questões do relatório descritivo, porém considerando os valores como amostra e inferindo valores para a população. Utilizou-se a técnica de intervalos de confiança e bootstrap.

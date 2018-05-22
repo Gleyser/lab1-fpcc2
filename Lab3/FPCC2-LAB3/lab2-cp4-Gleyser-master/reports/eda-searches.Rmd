@@ -1,0 +1,226 @@
+---
+title: "Lab 2 - Checkpoint 4: An?lise de dados de buscas em projetos da Wikimedia"
+output: html_notebook
+---
+
+O objetivo deste estudo ? investigar dados de buscas realizadas por usu?rios em projetos da Wikimedia. Os dados de buscas de usu?rios selecionados aleatoriamente foram coletados durante 8 dias por logs de eventos e disponibilizados em processos seletivos da Wikimedia Foundation em 2016. Os dados originais est?o disponiveis no site da wikimedia em `/data/search_data.csv`. Os dados s?o usados para avaliar a satisfa??o do usu?rio com os resultados das buscas. Os resultados, armazenados em logs, permitem identificar o tempo que os usu?rios permanecem nas p?ginas visitadas. 
+
+## 1. Configura??es iniciais e conjunto de dados 
+
+O primeiro passo para iniciarmos o estudo ? conhecer a base de dados, as vari?veis utilizadas e as configura??es iniciais. O c?digo a seguir mostra as bibliotecas e depend?ncias utilizadas. 
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(lubridate)
+library(ggplot2)
+library(knitr)
+theme_set(theme_bw())
+```
+
+```{r ETL}
+buscas = read_csv(here::here("data/search_data.csv")) %>%
+    mutate(day=round_date(session_start_date, unit = "day")) %>%
+    filter((first_click <= results) | (is.na(first_click) & num_clicks == 0)) %>%
+    head(1000)
+
+## Parsed with column specification:
+ cols(
+   session_id = col_character(),
+   search_index = col_integer(),
+   session_start_timestamp = col_double(),
+   session_end_timestamp = col_double(),
+   session_start_date = col_datetime(format = ""),
+   session_end_date = col_datetime(format = ""),
+   checkin = col_integer(),
+   group = col_character(),
+   results = col_integer(),
+   num_clicks = col_integer(),
+   first_click = col_integer()
+ )
+```
+
+No c?digo acima temos as bibliotecas utilizadas e a leitura dos dados. Incluimos ainda a coluna **day** que cont?m a data, sem a hora, apenas o dia. O nosso conjunto de dados possui as seguintes colunas:
+
++ **session_id**: Essa coluna ? um ID exclusivo que identifica as sess?es;
++ **search_index:** Index da busca realizada pelo usu?rio na sess?o;
++ **session_start_timestamp:** Marca??o do tempo no in?cio da busca;
++ **session_end_timestamp:** Marca??o do tempo no fim da busca;
++ **session_start_date:** Data e hora do in?cio da busca;
++ **session_end_date:** Data e hora do fim da busca;
++ **checkin:** Duran??o do tempo em que a p?gina ficou aberta;
++ **group:** Representa o grupo. Esse grupo pode ser "a" ou "b", sendo o grupo b, o grupo de controle;
++ **results:** N?mero de resultados retornados ao usu?rio;
++ **num_clicks:** N?mero de cliques do usu?rio;
++ **first_click:** Posi??o do resultado que o usu?rio clicou primeiro.
+
+Al?m de incluir a vari?vel **day**, alguns dados foram filtrados e removidos da base inicial por serem considerados inconsistentes. COnsiderando a explica??o da sem?ntica de cada coluna, temos que o primeiro clique do usu?rio deve est? entre 1 e o n?mero total de resultados retornado pela busca. Sendo assim, o n?mero **first_click** deve est? entre 1 e  **results**. Al?m disso, o n?mero de cliques (**num_clicks**) deve estpa consistente com a coluna **first_click**. Se o usu?rio fez algum clique, deve existir a posi??o do primeiro click. Linhas que n?o atendem esses par?metros foram consideradas inconsistentes e foram filtradas. 
+
+## 2. Quest?es de pesquisa 
+
+Seguiremos as quest?es de pesquisas propostas no processo seletivo da Wikimedia. O objetivo ? analisar o comportamento das buscas e navega??es de dois grupos de usu?rios selecionados aleatoriamente. As quest?es de pesquisa seguem abaixo:
+
++ **Quest?o de Pesquisa 1:** Qual ? a taxa de cliques geral di?ria? Como ela varia entre os grupos A e B?
+
++ **Quest?o de Pesquisa 2:** Quais resultados os usu?rios tendem a tentar primeiro? Como isso muda no dia-a-dia?
+
++ **Quest?o de Pesquisa 3:** Qual ? a taxa de resultados zero geral di?ria? Como ela varia entre os grupos A e B?
+
++ **Quest?o de Pesquisa 4:** Vamos assumir que a dura??o da sess?o de busca seja aproximadamente o tempo entre o primeiro evento de busca e o ?ltimo evento de busca da sess?o. Como a dura??o da sess?o se relaciona com o n?mero de cliques?
+
+A seguir iremos explorar as quest?es de pesquisa e conhecer melhorar a distribui??o das vari?veis utilizadas. 
+
+## 2. Qual ? a taxa de cliques geral di?ria? Como ela varia entre os grupos A e B?
+
+Para respondermos a primeira quest?o de pesquisa, precisamos conhecer a distribui??o da taxa de cliques. A quantidade total de vezes que o usu?rio clicou nos resultados retornados pela busca ? representado pela vari?vel **num_clicks:**. Os valores variam entre X e Y, sendo que existem mais cliques nas buscas dos usu?rios do grupo A. Os gr?ficos a seguir mostram a distribui??o da quantidade de cliques por grupo e dia.
+
+Distribui??o da quantidade de cliques
+```{r}
+buscas %>% 
+    ggplot(aes(x = group, y = num_clicks)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    scale_y_log10() +
+    ggtitle("Distribui??o da quantidade de cliques por grupo") +
+    xlab("Grupo") + 
+    ylab("Quantidade de cliques") 
+```
+
+Distribui??o do n?mero de cliques por grupo
+```{r}
+buscas %>% 
+    ggplot(aes(x= num_clicks)) + 
+    geom_histogram(bins = 30, fill = "white", color = "blue") + 
+    facet_grid(group ~ .) +
+    geom_rug(alpha = .3) +
+    ggtitle("Distribui??o do n?mero de cliques por grupo") +
+    xlab("N?mero de cliques") + 
+    ylab("Quantidade") 
+
+```
+
+Quantidade do n?mero de cliques por dia e grupo
+```{r}
+buscas %>% 
+    ggplot(aes(x = group, y = num_clicks)) + 
+    geom_jitter(alpha = 0.6, width = 0.2, size = 1) +
+    scale_y_log10() +
+    ggtitle("Quantidade de cliques por dia e grupo") +
+    facet_wrap(~ day) + 
+    xlab("Grupo") + 
+    ylab("Quantidade de cliques") 
+    
+    
+```
+
+Aqui temos a taxa de cliques di?rio por grupo e dia
+```{r}
+agrupamento = buscas %>%
+  filter(results >= 1, !is.na(num_clicks)) %>%
+  group_by(day, group, num_clicks) %>%
+  summarise(n = n()) %>% 
+  mutate(taxaDeCliques = n / sum(n) * 100) 
+
+agrupamento %>% 
+  filter(num_clicks > 0) %>%
+  ggplot(aes(x = day, y =  taxaDeCliques)) + 
+  geom_col(alpha = .5, show.legend = TRUE) +
+  facet_grid(group ~ .) +
+  ggtitle("Taxa de cliques por dia e grupo") +
+  xlab("Dia") + 
+  ylab("Taxa de cliques")
+  
+    
+```
+
+## 3. Quais resultados os usu?rios tendem a tentar primeiro? Como isso muda no dia-a-dia?
+
+Distribui??o da quantidade de resultados
+```{r}
+buscas %>% 
+    ggplot(aes(x = group, y = results)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    scale_y_log10() +
+    ggtitle("Distribui??o da quantidade de resultados por grupo") +
+    xlab("Grupo") + 
+    ylab("Quantidade de resultados") 
+    
+    
+```
+
+Quantidade de resultados por dia e grupo
+```{r}
+buscas %>% 
+    ggplot(aes(x = group, y = results)) + 
+    geom_jitter(alpha = 0.6, width = 0.2, size = 1) +
+    scale_y_log10() +
+    ggtitle("Quantidade de resultados por dia e grupo") +
+    facet_wrap(~ day) + 
+    xlab("Grupo") + 
+    ylab("Quantidade de resultados") 
+    
+    
+```
+
+```{r}
+buscas %>%
+  subset(select = c(results)) %>%
+  summary()
+
+```
+
+```{r}
+buscas %>% 
+    filter(results > 0, !is.na(first_click)) %>%
+    ggplot(aes(x = first_click, y=results, color=group)) +
+    geom_jitter(width = .2, alpha=.4) +
+    scale_y_log10() +
+    facet_wrap(~ day) +
+    xlab("Indice da p?gina clicada") + 
+    ylab("Quantidade de resultados") +
+    labs(color="Grupo") +
+    ggtitle("Distribui??o do ?ndice clicado e a quantidade de resultados por dia e grupo")     
+```
+
+
+## 3. Qual ? a taxa de resultados zero geral di?ria? Como ela varia entre os grupos A e B?
+
+Quantidade de buscas por grupo
+```{r}
+taxa_res_group <- buscas %>%
+  group_by(group, results) %>%
+  summarise(n = n()) %>% 
+  mutate(taxa_res_group = n / sum(n) * 100) 
+
+taxa_res_group %>% 
+  filter(results == 0) %>% 
+  ggplot(aes(x = group, y = taxa_res_group )) + 
+  geom_col(width = .3, alpha = .5, fill = "darkcyan") +
+  ggtitle("Taxa de resultados igual a zero por grupo") +
+  xlab("Grupo") + 
+  ylab("Taxa de resultados zero")
+    
+```
+
+
+## 4. Vamos assumir que a dura??o da sess?o de busca seja aproximadamente o tempo entre o primeiro evento de busca e o ?ltimo evento de busca da sess?o. Como a dura??o da sess?o se relaciona com o n?mero de cliques?
+
+```{r}
+duracao = buscas %>%
+    group_by(session_id) %>%
+    mutate(session_length=as.numeric(
+           difftime(max(session_start_date),
+                        min(session_start_date),
+                            units = c("secs")))
+        )
+
+duracao %>%
+    ggplot(aes(x=num_clicks, y=session_length, )) +
+    geom_point() +
+    facet_wrap(~ group) +
+    ggtitle("Dura??o da sessao por n?mero de cliques e grupo") +
+    xlab("Cliques") + 
+    ylab("Dura??o da sess?o")
+```
+
+
+
