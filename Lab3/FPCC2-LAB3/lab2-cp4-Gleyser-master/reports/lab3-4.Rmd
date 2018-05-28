@@ -1,0 +1,160 @@
+---
+title: 'Lab 3 - Checkpoint 4 - Análise de dados de buscas em projetos da Wikimedia
+  - InferÃªncia'
+output:
+  html_document:
+    df_print: paged
+---
+
+O objetivo deste estudo é investigar dados de buscas realizadas por usuários em projetos da Wikimedia. Os dados de buscas de usuários selecionados aleatoriamente foram coletados durante 8 dias por logs de eventos e disponibilizados em processos seletivos da Wikimedia Foundation em 2016. Os dados originais estão disponiveis no site da wikimedia em ‘/data/search_data.csv.’ Os dados são usados para avaliar a satisfação do usuário com os resultados das buscas. Os resultados, armazenados em logs, permitem identificar o tempo que os usuários permanecem nas páginas visitadas.
+
+Realizou-se em relatórios anteriores análise descritiva dos dados e inferência utilizando intervalo de confiança, nesse relatório será realizada inferência via teste de hipótese com permutação, usando a biblioteca resample. 
+
+## 1. Configurações iniciais e conjunto de dados 
+
+O primeiro passo para iniciarmos o estudo é conhecer a base de dados, as variáveis utilizadas e as configurações iniciais. O código a seguir mostra as bibliotecas e dependências utilizadas. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(lubridate)
+library(ggplot2)
+library(knitr)
+library(boot)
+library(resample)
+theme_set(theme_bw())
+```
+
+```{r ETL}
+buscas = read_csv(here::here("data/search_data.csv")) %>%
+    mutate(day=round_date(session_start_date, unit = "day")) %>%
+    filter((first_click <= results) | (is.na(first_click) & num_clicks == 0) & !is.na(num_clicks)) #%>%
+    #head(10000)
+
+## Parsed with column specification:
+ cols(
+   session_id = col_character(),
+   search_index = col_integer(),
+   session_start_timestamp = col_double(),
+   session_end_timestamp = col_double(),
+   session_start_date = col_datetime(format = ""),
+   session_end_date = col_datetime(format = ""),
+   checkin = col_integer(),
+   group = col_character(),
+   results = col_integer(),
+   num_clicks = col_integer(),
+   first_click = col_integer()
+ )
+```
+
+No código acima temos as bibliotecas utilizadas e a leitura dos dados. Incluimos ainda a coluna **day** que contém a data, sem a hora, apenas o dia. O nosso conjunto de dados possui as seguintes colunas:
+
+session_id: Essa coluna é um ID exclusivo que identifica as sessões; 
+search_index: Index da busca realizada pelo usuário na sessão; 
+session_start_timestamp: Marcação do tempo no início da busca; session_end_timestamp: Marcação do tempo no fim da busca; 
+session_start_date: Data e hora do início da busca; 
+session_end_date: Data e hora do fim da busca; 
+checkin: Duranção do tempo em que a página ficou aberta; 
+group: Representa o grupo. Esse grupo pode ser “a” ou “b”, sendo o grupo b, o grupo de controle; 
+results: Número de resultados retornados ao usuário; 
+num_clicks: Número de cliques do usuário; 
+first_click: Posição do resultado que o usuário clicou primeiro;
+day: Data do início da busca.
+
+Além de incluir a variável day, alguns dados foram filtrados e removidos da base inicial por serem considerados inconsistentes. COnsiderando a explicação da semântica de cada coluna, temos que o primeiro clique do usuário deve está entre 1 e o número total de resultados retornado pela busca. Sendo assim, o número first_click deve está entre 1 e results. Além disso, o número de cliques (num_clicks) deve está consistente com a coluna first_click. Se o usuário fez algum clique, deve existir a posição do primeiro click. Linhas que não atendem esses parâmetros foram consideradas inconsistentes e foram filtradas. Como estamos interessados em buscas que contém resultados, foram filtradas também resultados onde essa variável era inexistente.
+
+Iremos utilizar a técnica de permutação e teste de hipóteses para responder as questões a seguir.
+
+## 2. Pergunta 1: Como a taxa de cliques diária varia entre os grupos A e B?
+
+Essa pergunta envolve verificar a variação da taxa de cliques entre os grupos A e B. Para responder essa pergunta iremos utilizar as variáveis num_clicks e group. Como precisamos da taxa diária, também utilizaremos a variável day. 
+
+COnsiderando que a taxa de cliques é a soma dos cliques do dia dividido pelo total de buscas naquele dia, o objetivo é estimar esse valor e verificar como varia entre os grupos A e B. A função sumariza o número de cliques e dividide pelo total de buscas no mesmo dia.
+
+Para responder iremos comparar os valores da taxa de cliques diária do grupo A e B. A nossa amostra possui 135911 valores. Por meio de permutação é construído um modelo onde temos certeza que não existe relação/associação. O modelo é criado por reamostragem permutando o grupo, para toda a amostra. A hipótese nula é de que não existe diferença entre os grupos A e B.
+
+H0: Não existe variação na média diária da taxa de cliques entre os grupos A e B.
+H1: existe variação na média diária da taxa de cliques entre os grupos A e B.
+
+```{r}
+set.seed(1)
+
+taxaCliques <- function(dados) {
+    media <- dados %>% 
+            group_by(day) %>%
+            summarise(clicks = sum(num_clicks), n = n(), taxa = (clicks/n)*100) %>%
+            pull(taxa) %>%
+            mean()
+    return(media)
+}
+
+buscasColunas <- subset(buscas, select = c("session_id", "group", "num_clicks", "day", "results"))
+
+permutationTest2(buscasColunas, taxaCliques(buscasColunas), treatment = group)
+
+```
+
+
+Para verificar a hipótese nula, no código acima é criado o modelo a partir da amostra, onde temos certeza que não existe diferença na taxa de cliques entre os grupos A e B. Na sequencia verificamos, por meio do p-valor, quantas vezes a amostra foi representada pelo modelo criado. Se o número de vezes em que a nossa amostra foi representada pelo modelo criado for muito pequeno, podemos rejeitar a hipótese nula. Os resultados mostram que o p-value foi é igual a 0.0002 com 0.05 de significância. Sendo assim, rejeita-se a hipótese nula, e concluimos que há indícios que na população, existe variação na média diária da taxa de cliques entre os grupos A e B, com um certo nível de significância. Os resultados são semelhante aos encontrados usando intervalos de confiança. A média da diferença observada foi de 0.003171172, e por ser positiva indica que a média da taxa de cliques é maior no grupo A, porém não muito maior.
+
+## 3. Pergunta 2: a mesma pergunta 1, porém em vez de comparar o grupo A com o grupo B (um teste A/B), iremos comparar a metade das sessões do grupo A (escolhida aleatoriamente) com outra metade das sessões do mesmo grupo (um teste A/A).
+
+Essa pergunta é a mesma pergunta anterior, todavia a compração é entre grupos diderentes. Para responder essa pergunta iremos utilizar as variáveis num_clicks e day. Todavia precisamos criar uma nova variável para representar a primeira a segunda metade do grupo A.
+
+Seguimos considerando que a taxa de cliques é a soma dos cliques do dia dividido pelo total de buscas naquele dia, o objetivo é estimar esse valor e verificar como varia entre os grupos X (primeira metade das sessões do grupo A, escolhida aleatoriamente) e Y (segunda metade das sessões do grupo A, escolhida aleatoriamente). A função sumariza o número de cliques e dividide pelo total de buscas no mesmo dia.
+
+```{r}
+# filtrando o grupo A
+
+taxaCliques <- function(dados) {
+    media <- dados %>% 
+            group_by(day) %>%
+            summarise(clicks = sum(num_clicks), n = n(), taxa = (clicks/n)*100) %>%
+            pull(taxa) %>%
+            mean()
+    return(media)
+}
+
+buscasColunas <- subset(buscas, select = c("session_id", "group", "num_clicks", "day", "results"))
+
+grupoA <- buscasColunas %>%
+            filter(group == "a") 
+
+# calcular o tamanho da amostra
+amostraSize <- grupoA %>%
+                    summarise(tamanho = n()) %>%
+                    pull(tamanho)
+
+x <- grupoA %>%
+                slice(1 : (amostraSize/2)) %>%   
+                mutate(grupo = "x")
+    
+y <- grupoA %>%
+                slice(amostraSize/2 + 1: amostraSize) %>%  
+                mutate(grupo = "y")
+    
+nova_amostra <- bind_rows(x, y)
+
+permutationTest2(nova_amostra, taxaCliques(nova_amostra), treatment = grupo)
+    
+
+```
+Para responder iremos comparar os valores da taxa de cliques diária do grupo X e Y. A nossa amostra possui 91739 valores. Por meio de permutação é construído um modelo onde temos certeza que não existe relação/associação. O modelo é criado por reamostragem permutando o grupo, para toda a amostra. A hipótese nula é de que não existe diferença entre os grupos X e Y.
+
+H0: Não existe variação na média diária da taxa de cliques entre os grupos X e Y.
+H1: existe variação na média diária da taxa de cliques entre os grupos X e Y.
+
+Para verificar a hipótese nula, no código acima é criado o modelo a partir da amostra, onde temos certeza que não existe diferença na taxa de cliques entre os grupos X e Y. Na sequencia verificamos, por meio do p-valor, quantas vezes a amostra foi representada pelo modelo criado. Se o número de vezes em que a nossa amostra foi representada pelo modelo criado for muito pequeno, podemos rejeitar a hipótese nula. Os resultados mostram que o p-value foi é igual a 0.0594 com 0.05 de significância. Sendo assim, não podemos rejeitar a hipótese nula e concluimos que não é possível confirmar que existe variação na média diária da taxa de cliques entre os grupos X e Y. O resultado faz sentido, afinal os grupos X e Y são derivados do grupo A, logo espera-se que não exista diferenças. A média da diferença observada foi de 0.003171172, e por ser positiva indica que a média da taxa de cliques é maior no grupo X, porém não muito maior. A média foi -0.6643105 (negativa) indicando ser maior no grupo Y. COnsiderando que foram escolhidos aleatoriamente, no relatório usando intervalos de confiança obteve-se resultado semelhante, ou seja, Como o valor é negativo podemos inferir que a taxa é maior na segunda metade, porém não muito maior. 
+
+
+## 4. Vantagens e desvantagens utilizando ICs e teste de hipóteses
+
+As duas perguntas foram respondidas usando as duas técnicas. As conclusões foram semelhante, todavia quando comparo os resultados obtidos, a primeira diferença é que usando intervalos de confiança, os resultados possuem mais informação, permitindo concluir mais e melhor sobre a população. Os intervalos permitem que sejam realizadas compações entre grupos mais facilmente, além de que as conclusões parecem ser mais confiáveis. Realizar o teste de hipótese foi mais fácil que fazer os intervalos de confiança, e também, na  minha opinião, são mais fáceis de compreender. Como visto em sala de aula, o idela é utilizar as duas técnicas e ter conclusões mais fortes. 
+
+
+
+
+
+
+
