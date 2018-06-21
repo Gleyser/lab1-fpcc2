@@ -1,0 +1,332 @@
+---
+title: "Prob 5, CP 2: Beleza e avaliação"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r warning=FALSE, echo=FALSE}
+library(tidyverse)
+library(broom)
+library(modelr)
+theme_set(theme_report())
+library(here)
+library(ggplot2)
+library(knitr)
+theme_set(theme_bw())
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+É comum que cursos universitários permitam que os alunos possam avaliar o curso e o professor de maneira anônima ao final do semestre. Todavia, o uso das avaliações dos alunos como um indicador da qualidade do curso e a eficácia do ensino é frequentemente criticado porque essas medidas podem refletir a influência de características não relacionadas à docência, tal como a aparência física do professor. O objetivo deste estudo é investigar dados para examinar a hipótese de que a beleza do professor influencia na percepção de competência dos alunos.
+
+Os dados foram coletados a partir das avaliações discentes de final de semestre de uma grande amostra de professores da Universidade do Texas em Austin. Além disso, seis estudantes avaliaram a aparência física dos professores. O resultado é um banco de dados no qual cada linha contém diferentes disciplinas e cada coluna representa as variáveis sobre as disciplinas e os professores.
+
+## 1. Configurações iniciais e conjunto de dados 
+
+O primeiro passo para iniciarmos o estudo é conhecer a base de dados, as variáveis utilizadas e as configurações iniciais. O código a seguir mostra as bibliotecas e dependências utilizadas
+
+```{r ETL}
+dados = read_csv(here::here("data/evals.csv"))
+
+#Parsed with column specification:
+cols(
+  .default = col_character(),
+  score = col_double(),
+  age = col_integer(),
+  cls_perc_eval = col_double(),
+  cls_did_eval = col_integer(),
+  cls_students = col_integer(),
+  bty_f1lower = col_integer(),
+  bty_f1upper = col_integer(),
+  bty_f2upper = col_integer(),
+  bty_m1lower = col_integer(),
+  bty_m1upper = col_integer(),
+  bty_m2upper = col_integer(),
+  bty_avg = col_double()
+)
+```
+
+A base de dados contém 463 observações no qual cada linha contém diferentes disciplinas e cada coluna representa as variáveis sobre as disciplinas e os professores. O nosso conjunto de dados possui as seguintes colunas:
+
+**score**: é a pontuação média do docente, sendo (1) muito insatisfatório e (5) excelente.
+**rank**: nivel do professor, podendo ser horista, assistente e titular.
+**language**: língua da universidade frequentada pelo professor: inglês ou não inglês.
+**ethnicity**: etnia do professor. Minoria ou não minoria.
+**gender**: gênero do professor: feminino ou masculino.
+**age**: idade do professor. 
+**cls_perc_eval**: percentual de alunos que completaram a avaliação.
+**cls_did_eval**: número de alunos que completaram a avaliação.
+**cls_students**: número total de alunos na turma.
+**cls_levels**: nivel da disciplina: introdutória, avançada. 
+**cls_profs**: número de professores ministrando módulos na disciplina dentro da amostra: único ou múltiplos.
+**cls_credits**: número de créditos da disciplina.
+**bty_f1lower**: avaliação de beleza por aluna de nível inicial. (1) mais baixo e (10) mais alto.
+**bty_f1upper**: avaliação de beleza por aluna de nível avançado.(1) mais baixo e (10) mais alto.
+**bty_f2upper**: avaliação de beleza por segunda aluna de nível avançado. (1) mais baixo e (10) mais alto.
+**bty_m1lower**: avaliação de beleza por aluno de nível inicial. (1) mais baixo e (10) mais alto.
+**bty_m1upper**: avaliação de beleza por aluno de nível avançado. (1) mais baixo e (10) mais alto.
+**bty_m2upper**:a valiação de beleza por segundo aluno de nível inicial. (1) mais baixo e (10) mais alto.
+**bty_avg**: média da avaliação de beleza do professor. (1) mais baixo e (10) mais alto.
+**pic_outfit**: roupa do professor na foto avaliada. formal ou informal.
+**pic_color**: cor da foto avaliado. colorida ou preto e branco.
+
+
+## 2. Análise descritiva e variáveis envolvidas
+
+Nesta seção iremos descrever a base de dados e as variáveis utilizadas, para isso serão utilizados modelos de resumo e gráficos. Começamos identificando que dos 463 professores avaliados, a maioria é homem e pertecente ao grupo de não minorias e é titular, conforme os gráficos a seguir: 
+
+```{r}
+
+summary(dados)
+
+dados %>% 
+    group_by(gender) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = gender, y = n)) +
+    geom_col(colour="black", fill="white", show.legend = TRUE) + 
+    ylab("Quantidade de professores") + 
+    xlab("Gênero") +
+    ggtitle("Quantidade de professores por gênero") 
+
+```
+
+```{r}
+dados %>% 
+    group_by(ethnicity) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = ethnicity, y = n)) +
+    geom_col(colour="black", fill="white", show.legend = TRUE) + 
+    ylab("Quantidade de professores") + 
+    xlab("Etnia") +
+    ggtitle("Quantidade de professores por etnia") 
+
+```
+
+```{r}
+dados %>% 
+    group_by(rank) %>% 
+    summarise(n = n()) %>% 
+    ggplot(aes(x = rank, y = n)) +
+    geom_col(colour="black", fill="white", show.legend = TRUE) + 
+    ylab("Quantidade de professores") + 
+    xlab("Rank - nível do professor") +
+    ggtitle("Quantidade de professores por rank") 
+
+```
+
+Analisando os gráficos abaixo e o sumário dos dados, podemos observar que em relação a idade dos professores, o professor mais novo é uma mulher com 29 anos e o mais velho é um homem com 73 anos. A professora mais velha está por volta dos 65 anos.  A média da idade dos professores é 48 anos. Os homens têm mais idade do que as mulheres. O limite superior dos homens é maior e o intervalo entre a média e o primeiro quartil dos é maior, assim podemos concluir que a variação da idade dos professores homens é maior, porém não muito maior que nas professoras. No segundo gráfico podemos observar que o maior número de professores mulheres está entre 40 e 50 anos e nos homens entre 45 e 58.
+
+```{r}
+dados %>% 
+    ggplot(aes(x = gender, y = age)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    ylab("Idade") + 
+    ggtitle("Idade dos professores pelo gênero") + 
+    xlab("Gênero")
+```
+
+```{r}
+dados %>% 
+    ggplot(aes(x = age)) + 
+    geom_histogram(bins = 20, fill = "white", color = "blue") + 
+    facet_grid(gender ~ .) +
+    ylab("Quantidade de professores") + 
+    xlab("Idade") +
+    ggtitle("Total de professores pela idade e gênero") 
+```
+```{r}
+dados %>% 
+    ggplot(aes(x= gender,  y = age)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Idade") + 
+    xlab("Gênero") +
+    ggtitle("Idade dos professores pelo gênero") 
+```
+Analisando os gráficos abaixo e o sumário dos dados, podemos observar que em relação ao número de alunos, a maior turma possui 581 e a menor 8 alunos. O menor percentual de avaliação é 10.42% e o maior é 100%. A maioria das turmas possui menos que 100 alunos, sendo que apenas 5 turmas possuem mais que 400 alunos. A média de alunos por turma é 55.18. 
+
+```{r} 
+dados %>% 
+    ggplot(aes(x = "", y = cls_students)) + 
+    geom_jitter(alpha = 0.4, width = 0.2, size = 0.8) +
+    ylab("Número de alunos") + 
+    ggtitle("Quantidade de alunos por turma") + 
+    xlab("Turmas") 
+    
+```
+Como será que se comporta a porcentagem de alunos que responderam a avaliação do professor, de acordo com o gênero do professor? Ao que indica o gráfico abaixo, os alunos tendem a completar a avaliação quando a professora é mulher. Além podemos perceber que a taxa de avaliação é bastante alta, ou seja, muitos aluinos completaram a avaliação.  
+
+```{r}
+dados %>% 
+    ggplot(aes(x = gender,  y = cls_perc_eval)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Percentual de alunos") + 
+    xlab("Gênero") +
+    ggtitle("Percentual de alunos que completaram a avaliação pelo gênero do professor") 
+```
+
+Em relação a avaliação de beleza, a menor pontuação é 1.667 de 3 homens e 6 mulheres (empatados) e a maior 8.167 de quatro professoras também empatadas na mesma pontuação. A média de avaliação de beleza parece comporta-se de forma semelhante entre mulheres e homens, porém a média dos professores homens é menor. Não existe também diferente entre as etnias. Já em relação a idade, observa-se que a média da avaliação de beleza do professor é maior em professores com até 48 anos. 
+
+```{r}
+dados %>% 
+    ggplot(aes(x= bty_avg)) + 
+    geom_histogram(bins = 10, colour="black", fill="white") + 
+    facet_grid(gender ~ .) + 
+    ylab("Quantidade de professores") + 
+    xlab("Média da avaliação de beleza do professor") +
+    ggtitle("Média da avaliação de beleza do professor por gênero")
+```
+
+```{r}
+dados %>% 
+    ggplot(aes(x = gender,  y = bty_avg)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Média da avaliação de beleza do professor") + 
+    xlab("Gênero") +
+    ggtitle("Média da avaliação de beleza do professor por gênero")
+```
+```{r}
+dados %>% 
+    ggplot(aes(x = ethnicity,  y = bty_avg)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Média da avaliação de beleza do professor") + 
+    xlab("Etnia") +
+    ggtitle("Média da avaliação de beleza do professor por etnia")
+```
+No gráfico abaixo podemos identificar que a avaliação de beleza é maior em professores mais jovens. Quanto mais jovem o professor, melhor a avaliação de beleza.  
+
+```{r}
+a = dados %>% 
+    filter(age <= 40) %>%
+    within(w <- "até 40 anos")
+
+b = dados %>% 
+    filter(age > 40) %>%
+    filter(age <=50) %>%
+    within(w <- "Entre 41 e 50 anos")
+
+c = dados %>% 
+    filter(age > 50) %>%
+    filter(age <=60) %>%
+    within(w <- "Entre 51 e 60 anos")
+
+
+d = dados %>% 
+    filter(age > 60) %>%
+    filter(age <=70) %>%
+    within(w <- "Entre 61 e 70 anos")
+
+
+e = dados %>% 
+    filter(age > 70) %>%
+    within(w <- "mais 70 anos")
+
+
+resultados <- bind_rows(a, b, c, d, e)
+
+resultados %>%
+    ggplot(aes(x= w,  y = bty_avg)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Média da avaliação de beleza do professor") + 
+    xlab("Idade do professor") +
+    ggtitle("Média da avaliação de beleza do professor por idade")
+```
+Agora vamos analisar o score de avaliação dos professores. O menor score é 2.3 de uma professora com 41 anos. Já o maior score é 5 que foi obtido por 11 professores, ou seja, esses professores receberam nota 5 de todos os alunos que lhe avaliaram. Apesar do score parecer se comportar semelhantemente entre homens e mulheres, a média do score dos professores homens é maior. Relacionando com a etnia, podemos observar que a média dos professores não pertecente as minorias é maior. 
+
+```{r}
+dados %>% 
+    ggplot(aes(x= score)) + 
+    geom_histogram(bins = 10, colour="black", fill="white") + 
+    facet_grid(gender ~ .) + 
+    ylab("Quantidade de professores") + 
+    xlab("Score do professor") +
+    ggtitle("Score do professor por gênero")
+```
+
+```{r}
+dados %>% 
+    ggplot(aes(x = gender,  y = score)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Score do professor") + 
+    xlab("Gênero") +
+    ggtitle("Score do professor por gênero")
+```
+
+```{r}
+dados %>% 
+    ggplot(aes(x = ethnicity,  y = score)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Score do professor") + 
+    xlab("Etnia") +
+    ggtitle("Score do professor por etnia")
+```
+
+
+A média de avaliação dos professores (score) é diferente de acordo com a idade do professor. A média é melhor em professores mais jovens, variando mais na faixa entre 61 e 70 anos. Já as melhores avaliações estão no grupo entre 41 e 60 anos. A avaliação é menor para professores com mais de 70 anos. 
+
+
+```{r}
+resultados %>%
+    ggplot(aes(x= w,  y = score)) + 
+    geom_boxplot(width = .25) + 
+    ylab("Score do professor") + 
+    xlab("Idade do professor") +
+    ggtitle("Score do professor por idade")
+```
+
+## 3. Regressão para avaliar beleza e score
+
+Nessa etapa do estudo será utilizada regressão linear simples para avaliar a relação entre beleza e score quando consideramos apenas essa variável como preditora. O objetivo é modelar o efeito da beleza na avaliação do professor.
+
+*Importante*: antes de fazermos qualquer modelo ou sumário é importante verificar os dados. 
+
+```{r}
+dados %>% 
+  ggplot(aes(x = bty_avg, y = score)) + 
+  geom_point() + 
+  ylab("Score do professor") + 
+  xlab("Avaliação de beleza") +
+  ggtitle("Score do professor e a avaliação de beleza")
+```
+Pra mim, não parece que existe uma relação. Mas vamos criar um modelo e verificar o que resultamos:
+
+```{r}
+modelo1 = lm(score ~ bty_avg, data = dados)
+
+tidy(modelo1, conf.int = TRUE, conf.level = 0.95)
+glance(modelo1)
+summary(modelo1)
+confint(modelo1)
+
+
+cacc_augmented = dados %>% 
+  add_predictions(modelo1) 
+
+cacc_augmented %>% 
+  ggplot(aes(x = bty_avg)) + 
+  geom_line(aes(y = pred), colour = "brown") + 
+  geom_point(aes(y = score)) + 
+  ylab("Score do professor") + 
+  xlab("Avaliação de beleza") +
+  ggtitle("Regressão do Score do professor e avaliação de beleza")
+
+```
+
+
+Regressão múltipla foi utilizada para analisar se a beleza do professor (BTY) tem uma associação significativa com a avaliação docente que os alunos dãop para o professor (SCORE).
+
+Os resultados da regressão indicam que um modelo tendo apenas esta variável independente como preditora no formato SCORE = 3.88034 + 0.06664.BTY explica 0.03502% da variância da variável de resposta (R2 = 0.03502). A beleza do professor, que é o número que representa a média da avaliação da beleza do professor realizada por 5 alunos tem erro (b = [0.0346; 0.0986], IC com 95%). O aumento de 1 unidade de BTY produz uma mudança de 0.06664 no SCORE.
+
+Podemos observar que a avaliação de beleza do professor não parece afetar a avaliação que os alunos fazem das aulas do professor. Esse modelo explica apenas 0.03502% da variância observada nos dados, a significância estatística é muito baixa. Diante dos resultados, a medida a ser tomada nesse ponto é partir para a construção de um modelo multivariado que possa identificar outras variáveis que podem explicar a variação de avaliações que observamos na descrição dos dados. 
+
+## 4. Modelo multivariado
+
+
+```{r}
+modelo2 = lm(score ~ bty_avg + age + gender + cls_students + cls_perc_eval + ethnicity + rank + language + cls_profs + cls_level, data = dados)
+
+tidy(modelo2, conf.int = TRUE, conf.level = 0.95)
+glance(modelo2)
+summary(modelo2)
+confint(modelo2)
+```
+

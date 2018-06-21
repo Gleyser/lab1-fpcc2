@@ -1,0 +1,234 @@
+---
+title: "Regressão linear na prática"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r warning=FALSE, echo=FALSE}
+library(tidyverse)
+library(broom)
+library(modelr)
+source(here::here("code/lib.R"))
+theme_set(theme_report())
+
+knitr::opts_chunk$set(tidy = FALSE,
+                      fig.width = 6,
+                      fig.height = 5)
+
+paleta = c("#404E4D",
+           "#92DCE5",
+           "#938BA1",
+           "#2D3142",
+           "#F4743B")
+```
+
+## Dados da CAPES sobre avaliação da pós-graduação
+
+A CAPES é um órgão do MEC que tem a atribuição de acompanhar a pós-graduação na universidade brasileira. Uma das formas que ela encontrou de fazer isso e pela qual ela é bastante criticada é através de uma avaliação quantitativa a cada x anos (era 3, mudou para 4). 
+
+Usaremos dados da penúltima avaliação da CAPES: 
+
+```{r}
+cacc = read_projectdata()
+
+glimpse(cacc)
+```
+
+### Produção e produtividade de artigos
+
+Uma das maneiras de avaliar a produção dos docentes que a CAPES utiliza é quantificando a produção de artigos pelos docentes. Os artigos são categorizados em extratos ordenados (A1 é o mais alto), e separados entre artigos em conferências e periódicos. Usaremos para esse lab a produção em periódicos avaliados com A1, A2 e B1. 
+
+```{r}
+cacc = cacc %>% 
+  mutate(producao = (periodicos_A1 + periodicos_A2 + periodicos_B1), 
+         produtividade = producao / `Docentes permanentes`, 
+         mestrados = Dissertacoes, 
+         doutorados = Teses,
+         mestrados_pprof = mestrados / `Docentes permanentes`, 
+         doutorados_pprof = doutorados / `Docentes permanentes`)
+```
+
+
+### EDA
+
+```{r}
+cacc %>% 
+  ggplot(aes(x = `Docentes permanentes`)) + 
+  geom_histogram(bins = 15, fill = paleta[1])
+
+cacc %>% 
+  ggplot(aes(x = producao)) + 
+  geom_histogram(bins = 15, fill = paleta[2])
+
+cacc %>% 
+  ggplot(aes(x = produtividade)) + 
+  geom_histogram(bins = 15, fill = paleta[3])
+```
+
+Se quisermos modelar o efeito do tamanho do programa em termos de docentes (permanentes) na quantidade de artigos publicados, podemos usar regressão. 
+
+*Importante*: sempre queremos ver os dados antes de fazermos qualquer modelo ou sumário: 
+
+```{r}
+cacc %>% 
+  ggplot(aes(x = `Docentes permanentes`, y = producao)) + 
+  geom_point()
+```
+
+Parece que existe uma relação. Vamos criar um modelo então:
+
+```{r}
+modelo1 = lm(producao ~ `Docentes permanentes`, data = cacc)
+
+tidy(modelo1, conf.int = TRUE, conf.level = 0.95)
+glance(modelo1)
+summary(modelo1)
+confint(modelo1)
+```
+
+Para visualizar o modelo:
+
+```{r}
+cacc_augmented = cacc %>% 
+  add_predictions(modelo1) 
+
+cacc_augmented %>% 
+  ggplot(aes(x = `Docentes permanentes`)) + 
+  geom_line(aes(y = pred), colour = "brown") + 
+  geom_point(aes(y = producao)) + 
+  labs(y = "Produção do programa")
+```
+
+Se considerarmos que temos apenas uma amostra de todos os programas de pós em CC no Brasil, o que podemos inferir a partir desse modelo sobre a relação entre número de docentes permanentes e produção de artigos em programas de pós? 
+
+Normalmente reportaríamos o resultado da seguinte maneira, substituindo VarIndepX e todos os x's e y's pelos nomes e valores de fato:
+
+> Regressão múltipla foi utilizada para analisar se VarIndep1 e VarIndep2 tem uma associação significativa com VarDep. Os resultados da regressão indicam que um modelo com os 2 preditores no formato VarDep = XXX.VarIndep1 + YYY.VarIndep2 explicam XX,XX% da variância da variável de resposta (R2 = XX,XX). VarIndep1, medida como/em [unidade ou o que é o 0 e o que é 1] tem uma relação significativa com o erro (b = [yy,yy; zz,zz], IC com 95%), assim como VarIndep2 medida como [unidade ou o que é o 0 e o que é 1] (b = [yy,yy; zz,zz], IC com 95%). O aumento de 1 unidade de VarIndep1 produz uma mudança de xxx em VarDep, enquanto um aumento...
+
+Produza aqui a sua versão desse texto, portanto:
+
+-----
+
+Regressão múltipla foi utilizada para analisar se a quantidade de docentes permanentes associados ao curso de pós graduação (QD) tem uma associação significativa com a produção do programa (PP). Os resultados da regressão indicam que um modelo tendo esta variável independente como preditor no formato PP = -41.2731 + 4.8134.QD explica 0,8146% da variância da variável de resposta (R2 = 0,8146). A quantidade de número de docentes, que é o número que representa a quantidade de docentes associados ao curso de pós graduação tem uma relação significativa com o erro (b = [4.26; 5.35], IC com 95%). O aumento de 1 unidade de QD produz uma mudança de 4.8134 em PP.
+
+-----
+
+Dito isso, o que significa a relação que você encontrou na prática para entendermos os programas de pós graduação no Brasil? E algum palpite de por que a relação que encontramos é forte?
+
+-----
+
+Podemos observar que o número de docentes efetivos no programa de pós graduação afeta a produção do programa, porém existem outros fatores que afetam a produção. Do modelo podemos identificar que são necessários pelo menos 8,5 (9) professores associados para que o programa possua produtividade positiva. Em relação ao R2, 81,46% da variável dependente (produção) é possível de ser explicada pelos regressores presentes no modelo (quantidade de professores). É um valor bastante alto, indicando que muito da produação pode ser explicada pelo número de professores associados. Com base nos resultados, podemos supor que quanto mais professores o programa possui, melhor é avaliado e mais produz. Esses resultados devem ocorrer pois quanto mais pessoas envolvidas, mais pesquisa e estudos são realizados e consequentemente mais artigos são produzidos. 
+
+-----
+
+## Mais fatores
+
+E se considerarmos também o número de alunos?
+
+```{r}
+modelo2 = lm(producao ~ `Docentes permanentes` + mestrados + doutorados, data = cacc)
+
+tidy(modelo2, conf.int = TRUE, conf.level = 0.95)
+glance(modelo2)
+confint(modelo2)
+```
+
+Visualizar o modelo com muitas variáveis independentes fica mais difícil
+
+```{r}
+para_plotar_modelo = cacc %>% 
+  data_grid(producao = seq_range(producao, 10), # Crie um vetor de 10 valores no range
+            `Docentes permanentes` = seq_range(`Docentes permanentes`, 4),  
+            # mestrados = seq_range(mestrados, 3),
+            mestrados = median(mestrados),
+            doutorados = seq_range(doutorados, 3)) %>% 
+  add_predictions(modelo2)
+
+glimpse(para_plotar_modelo)
+
+```
+
+```{r}
+para_plotar_modelo %>% 
+  ggplot(aes(x = `Docentes permanentes`, y = pred)) + 
+  geom_line(aes(group = doutorados, colour = doutorados)) + 
+  # facet_grid(. ~ as.factor(mestrados)) + 
+  geom_point(data = cacc, aes(y = producao, colour = doutorados))
+```
+
+Considerando agora esses três fatores, o que podemos dizer sobre como cada um deles se relaciona com a produção de um programa de pós em CC? E sobre o modelo? Ele explica mais que o modelo 1? 
+
+-----
+
+Regressão múltipla foi utilizada para analisar se a quantidade de docentes permanentes associados ao curso de pós graduação (QD) e o número de mestrados (NM) e  o número de doutorados  (ND) tem uma associação significativa com a produção do programa (PP).  Os resultados da regressão indicam que um modelo com os 3 preditores no formato PP = -14.3663 + 3.4997.QD + (-0.1950.NM) + 1.0008.ND  explicam 87,07% da variância da variável de resposta (R2 = 0.8707). 
+
+Em relação as variáveis independentes:
+
+QD, medida como a quantidade de professores associados permanentemente tem uma relação significativa com o erro (b = [2,58; 4,41], IC com 95%);
+
+NM medida como a quantidade de mestrados tem uma relação significativa com o erro (b = [-0,35; -0,03], IC com 95%);
+
+ND medida como a quantidade de doutorados tem uma relação significativa com o erro (b = 0.63; 1.36], IC com 95%).
+
+
+O aumento de 1 unidade de QD produz uma mudança de 3.4997 no PP, enquanto o aumento de 1 unidade de NM diminiu o PP em 0.1950, por outro lado o aumento de 1 unidade de ND aumenta o PP em 1.0008.
+
+Esse modelo mostra que o número de professores é a variável que mais afeta a produção do programa de pós graduação. Em relação ao número de alunos, o número de mestrados parece afgetar negativamente a produção. A minha hipótese e que isso ocorra pois como o mestrado tem menor duração, a produção de artigos seja menor ou com menor qualis. Em relação aos douturados, quanto mais doutorados maior a produção, todavia é uma relação pequena, apenas 1.0008.ND. Acredito que com maior número de doutorados, existe mais engajamento com a pesquisa e consequentemente mais produção. Em relação ao qualis como o doutorado possui mair duração, os artigos certamente devem possuir maior qualis. 
+
+-----
+
+
+## Agora produtividade 
+
+Diferente de medirmos produção (total produzido), é medirmos produtividade (produzido / utilizado). Abaixo focaremos nessa análise. Para isso crie um modelo que investiga como um conjunto de fatores que você julga que são relevantes se relacionam com a produtividade dos programas. Crie um modelo que avalie como _pelo menos 3 fatores_ se relacionam com a produtividade de um programa. Pode reutilizar fatores que já definimos e analizamos para produção. Mas cuidado para não incluir fatores que sejam função linear de outros já incluídos (ex: incluir A, B e um tercero C=A+B)
+
+Produza abaixo o modelo e um texto que comente (i) o modelo, tal como os que fizemos antes, e (ii) as implicações - o que aprendemos sobre como funcionam programas de pós no brasil?.
+
+Em relação a produtividade (produzido / utilizado), escolhi o modelo que segue abaixo:
+
+
+
+```{r}
+modelo3 = lm(produtividade ~ `Docentes permanentes` + mestrados + doutorados, data = cacc)
+
+tidy(modelo3, conf.int = TRUE, conf.level = 0.95)
+summary(modelo3)
+glance(modelo3)
+confint(modelo3)
+```
+
+```{r}
+para_plotar_modelo = cacc %>% 
+  data_grid(produtividade = seq_range(produtividade, 10), # Crie um vetor de 10 valores no range
+            `Docentes permanentes` = seq_range(`Docentes permanentes`, 4),  
+            # mestrados = seq_range(mestrados, 3),
+            mestrados = median(mestrados),
+            doutorados = seq_range(doutorados, 3)) %>% 
+  add_predictions(modelo3)
+
+glimpse(para_plotar_modelo)
+
+
+para_plotar_modelo %>% 
+  ggplot(aes(x = `Docentes permanentes`, y = pred)) + 
+  geom_line(aes(group = doutorados, colour = doutorados)) + 
+  # facet_grid(. ~ as.factor(mestrados)) + 
+  geom_point(data = cacc, aes(y = producao, colour = doutorados))
+
+```
+Regressão múltipla foi utilizada para analisar se a quantidade de docentes permanentes associados ao curso de pós graduação (QD) e o número de mestrados (NM) e  o número de doutorados  (ND) tem uma associação significativa com a produtividade do programa (Prod).  Os resultados da regressão indicam que um modelo com os 3 preditores no formato Prod = 1.695839 + 0.032265.QD + (-0.004488.NM) + 0.022936.ND  explicam 37,71% da variância da variável de resposta (R2 = 0.3771). 
+
+Em relação as variáveis independentes:
+
+QD, medida como a quantidade de professores associados permanentemente tem uma relação significativa com o erro (b = [1.011; 2.380], IC com 95%);
+
+NM medida como a quantidade de mestrados tem uma relação significativa com o erro (b = [-0.009; 0.0030], IC com 95%);
+
+ND medida como a quantidade de doutorados tem uma relação significativa com o erro (b = 0.006; 0.039], IC com 95%).
+
+
+O aumento de 1 unidade de QD produz uma mudança de 0.032265 no Prod, enquanto o aumento de 1 unidade de NM diminiu o Prod em 0.004488, por outro lado o aumento de 1 unidade de ND aumenta o Prod em 0.022936.
+
+Esse modelo mostra que o número de professores é a variável que mais afeta a produtividade do programa de pós graduação. Em relação ao número de alunos, o número de mestrados parece afgetar negativamente a produtividade, porém se considerarmos o intervalo de confiança, provavelmente é a variável que menos afeta, sendo quase como neutra em relação produzido/utilizado . A minha hipótese e que isso ocorra pois como o mestrado tem menor duração, a produção de artigos seja menor ou com menor qualis e assim seja pouco utilizado. Em relação aos douturados, quanto mais doutorados maior a produção, todavia é uma relação pequena, apenas 0.022936.ND Acredito que com maior número de doutorados, existe mais engajamento com a pesquisa e consequentemente mais produção, todavia pouca produtividade. Nesse sentido, aprendemos que a pós graduação produz muitos artigos, com bom qualis, essencialmente no doutorado, todavia a relação de produtividade é explicada apenas 37,71% pelos preditores número de professores, mestrados e doutorados. Nesse sentido, o número de pessoas engajadas não parece ser forte preditore para a produtividade. Certamente existem programas que possuem poucos professores, mestrados e doutorados, mas que produzem muitos estudos que são utilizados. Para outras análises acredito que avaliar a associação significativa entre a produtividade e produção seja interessante para confrontar esses resultados. 
+
